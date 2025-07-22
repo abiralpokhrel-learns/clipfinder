@@ -45,24 +45,33 @@ const acrConfig = {
   timeout: 10000 // 10 seconds timeout
 };
 
-let acrClient;
+let acrClient = null;
 
 // Initialize ACRCloud client
 function initializeACRClient() {
   if (!acrConfig.access_key || !acrConfig.access_secret) {
     console.warn('⚠️  ACRCloud credentials not found. Please set ACR_ACCESS_KEY and ACR_ACCESS_SECRET in .env file');
+    console.log('Current config:', {
+      access_key: acrConfig.access_key ? 'SET' : 'NOT SET',
+      access_secret: acrConfig.access_secret ? 'SET' : 'NOT SET',
+      host: acrConfig.host
+    });
     return null;
   }
   
   try {
     acrClient = new ACRCloudRecognizer(acrConfig);
     console.log('✅ ACRCloud client initialized successfully');
+    console.log('Using host:', acrConfig.host);
     return acrClient;
   } catch (error) {
     console.error('❌ Failed to initialize ACRCloud client:', error.message);
     return null;
   }
 }
+
+// Initialize ACRCloud client immediately
+initializeACRClient();
 
 // Routes
 app.get('/', (req, res) => {
@@ -90,10 +99,21 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/test-acr', async (req, res) => {
   try {
+    // Try to reinitialize if client is null
+    if (!acrClient) {
+      console.log('🔄 Attempting to reinitialize ACRCloud client...');
+      initializeACRClient();
+    }
+
     if (!acrClient) {
       return res.status(500).json({
         success: false,
-        error: 'ACRCloud client not initialized. Please check your credentials.'
+        error: 'ACRCloud client not initialized. Please check your credentials.',
+        debug: {
+          has_access_key: !!process.env.ACR_ACCESS_KEY,
+          has_access_secret: !!process.env.ACR_ACCESS_SECRET,
+          host: process.env.ACR_HOST
+        }
       });
     }
 
@@ -216,9 +236,6 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Initialize ACRCloud client on startup
-initializeACRClient();
-
 app.listen(PORT, () => {
   console.log(`🚀 ClipFinder server running on port ${PORT}`);
   console.log(`📡 API endpoints available at http://localhost:${PORT}`);
@@ -228,5 +245,7 @@ app.listen(PORT, () => {
     console.log('ACR_ACCESS_KEY=your_access_key');
     console.log('ACR_ACCESS_SECRET=your_access_secret');
     console.log('ACR_HOST=identify-us-west-2.acrcloud.com');
+  } else {
+    console.log('✅ ACRCloud credentials loaded');
   }
 });
