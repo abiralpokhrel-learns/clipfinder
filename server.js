@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import { ACRCloudRecognizer } from 'acrcloud';
+import pkg from 'acrcloud';
+const { ACRCloudRecognizer } = pkg;
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
