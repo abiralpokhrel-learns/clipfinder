@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipFinder - Music Recognition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin: 30px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .upload-text {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+        
+        .file-types {
+            color: #999;
+            font-size: 0.9em;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: left;
+        }
+        
+        .result.success {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+        }
+        
+        .result.error {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+        }
+        
+        .result.no-match {
+            background: #fffbeb;
+            border: 2px solid #f59e0b;
+        }
+        
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .song-info {
+            display: grid;
+            gap: 10px;
+        }
+        
+        .song-info h3 {
+            color: #0ea5e9;
+            margin-bottom: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .value {
+            color: #6b7280;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 ClipFinder</h1>
+        <p class="subtitle">Upload an audio clip to identify the song</p>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">🎧</div>
+            <div class="upload-text">Click to upload or drag & drop</div>
+            <div class="file-types">MP3, WAV, M4A, OGG (max 10MB)</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept="audio/*" />
+        
+        <button class="btn" onclick="testAPI()">Test API Connection</button>
+        
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Identifying music...</p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const loading = document.querySelector('.loading');
+        const result = document.getElementById('result');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        async function handleFile(file) {
+            if (!file.type.startsWith('audio/')) {
+                showResult('Please select an audio file.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            loading.style.display = 'block';
+            result.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/identify', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                loading.style.display = 'none';
+
+                if (data.success && data.identified) {
+                    showSongResult(data.data);
+                } else if (data.success && !data.identified) {
+                    showResult('No music identified in this audio clip. Try a clearer recording or a different part of the song.', 'no-match');
+                } else {
+                    showResult(data.error || 'Failed to identify music', 'error');
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                showResult('Network error: ' + error.message, 'error');
+            }
+        }
+
+        function showSongResult(data) {
+            const duration = data.duration ? Math.floor(data.duration / 1000) : null;
+            const durationText = duration ? `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}` : 'Unknown';
+            
+            result.innerHTML = `
+                <div class="result success">
+                    <div class="song-info">
+                        <h3>🎵 Song Identified!</h3>
+                        <div class="info-row">
+                            <span class="label">Title:</span>
+                            <span class="value">${data.title}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Artist:</span>
+                            <span class="value">${data.artist}</span>
+                        </div>
+                        ${data.album ? `
+                        <div class="info-row">
+                            <span class="label">Album:</span>
+                            <span class="value">${data.album}</span>
+                        </div>
+                        ` : ''}
+                        <div class="info-row">
+                            <span class="label">Duration:</span>
+                            <span class="value">${durationText}</span>
+                        </div>
+                        ${data.release_date ? `
+                        <div class="info-row">
+                            <span class="label">Release Date:</span>
+                            <span class="value">${data.release_date}</span>
+                        </div>
+                        ` : ''}
+                        <div class="info-row">
+                            <span class="label">Confidence:</span>
+                            <span class="value">${data.score}%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showResult(message, type) {
+            result.innerHTML = `<div class="result ${type}"><p>${message}</p></div>`;
+        }
+
+        async function testAPI() {
+            loading.style.display = 'block';
+            result.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/test-acr');
+                const data = await response.json();
+                loading.style.display = 'none';
+
+                if (data.success) {
+                    showResult('✅ ACRCloud API is working correctly!', 'success');
+                } else {
+                    showResult('❌ ACRCloud API test failed: ' + data.error, 'error');
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                showResult('Network error: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
